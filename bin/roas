@@ -1,0 +1,428 @@
+#!/usr/bin/env node
+
+var program = require('commander');
+var mkdirp = require('mkdirp');
+var os = require('os');
+var fs = require('fs');
+var _path = require('path');
+var readline = require('readline');
+var sortedObject = require('sorted-object');
+
+var _exit = process.exit;
+var eol = os.EOL;
+var pkg = require('../package.json');
+
+var version = pkg.version;
+
+// Re-assign process.exit because of commander
+// TODO: Switch to a different command framework
+process.exit = exit
+
+// CLI
+
+before(program, 'outputHelp', function () {
+  this.allowUnknownOption();
+});
+
+program
+  .version(version)
+  .usage('[options] [dir]')
+  .parse(process.argv);
+
+if (!exit.exited) {
+  main();
+}
+
+/**
+ * Install a before function; AOP.
+ */
+
+function before(obj, method, fn) {
+  var old = obj[method];
+
+  obj[method] = function () {
+    fn.call(this);
+    old.apply(this, arguments);
+  };
+}
+
+/**
+ * Prompt for confirmation on STDOUT/STDIN
+ */
+
+function confirm(msg, callback) {
+  var rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  rl.question(msg, function (input) {
+    rl.close();
+    callback(/^y|yes|ok|true$/i.test(input));
+  });
+}
+
+/**
+ * Create application at the given directory `path`.
+ *
+ * @param {String} path
+ */
+
+function createApplication(app_name, path) {
+  var wait = 5;
+
+  console.log();
+
+  function complete() {
+    if (--wait) return;
+    var prompt = launchedFromCmd() ? '>' : '$';
+
+    console.log();
+    console.log('   install dependencies:');
+    console.log('     %s cd %s && npm install', prompt, path);
+    console.log();
+    console.log('   run the app:');
+
+    if (launchedFromCmd()) {
+      console.log('     %s SET DEBUG=roas* & npm start', prompt, app_name);
+    } else {
+      console.log('     %s DEBUG=%s:* npm start', prompt, app_name);
+    }
+
+    console.log();
+  }
+
+  mkdir(path, function () {
+    mkdir(path + '/.vscode', function () {
+      copy(_path.join(__dirname, '..', 'templates', 'js', '.vscode'), path + '/.vscode');
+      complete();
+    });
+
+    mkdir(path + '/db', function () {
+      copy(_path.join(__dirname, '..', 'templates', 'js', 'db'), path + '/db');
+      complete();
+    });
+
+    mkdir(path + '/test', function () {
+      copy(_path.join(__dirname, '..', 'templates', 'js', 'test'), path + '/test');
+      complete();
+    });
+
+    mkdir(path + '/src', function () {
+      copy(_path.join(__dirname, '..', 'templates', 'js', 'src'), path + '/src');
+      complete();
+    });
+
+    // package.json
+    var pkg = {
+      "name": app_name,
+      "version": "1.0.0",
+      "description": "A Web App like Ruby on Rails with Koa2, ES6 and Sequelize",
+      "private": true,
+      "main": "index.js",
+      "scripts": {
+        "start": "cross-env NODE_ENV=development ./node_modules/.bin/nodemon -e ts -r ts-node/register src/app.ts",
+        "test": "./node_modules/.bin/mocha test/bootstrap.test.ts  --opts test/mocha.opts",
+        "build": "rd/s/q dist & tsc -p ./src/tsconfig.json & copyfiles -f ./src/public/*.* ./dist/public & copyfiles package.json process.json pm2_publish.bat pm2_publish.sh ./dist",
+        "pm2": "pm2 start process.json --env production",
+        "lint": "tslint -c tslint.json -p tsconfig.json",
+        "db:migrate": "./node_modules/.bin/sequelize db:migrate",
+        "db:rollback": "./node_modules/.bin/sequelize db:migrate:undo",
+        "create:migration": "./node_modules/.bin/sequelize migration:create"
+      },
+      "keywords": [
+        "koa2",
+        "typescript",
+        "sequelize"
+      ],
+      "license": "MIT",
+      "engines": {
+        "node": ">= 8.6.0"
+      },
+      "dependencies": {
+        "debug": "^3.1.0",
+        "formidable": "^1.2.1",
+        "koa": "^2.5.1",
+        "koa-bodyparser": "^4.2.1",
+        "koa-convert": "^1.2.0",
+        "koa-cors": "0.0.16",
+        "koa-json": "^2.0.2",
+        "koa-jwt": "^3.3.2",
+        "koa-multer": "^1.0.2",
+        "koa-router": "^7.4.0",
+        "koa-socket.io": "^1.1.2",
+        "koa-static": "^4.0.3",
+        "lodash": "^4.17.10",
+        "log4js": "^2.8.0",
+        "moment": "^2.22.2",
+        "multer": "^1.3.0",
+        "mysql2": "^1.5.3",
+        "node-cache": "^4.2.0",
+        "reflect-metadata": "^0.1.12",
+        "request": "^2.87.0",
+        "roas-mount": "^1.0.3",
+        "roas-restql": "^1.0.7",
+        "sequelize": "^4.37.10"
+      },
+      "devDependencies": {
+        "@types/chai": "^4.1.3",
+        "@types/koa": "^2.0.46",
+        "@types/koa-bodyparser": "^4.2.0",
+        "@types/koa-json": "^2.0.18",
+        "@types/koa-jwt": "^3.3.0",
+        "@types/koa-router": "^7.0.28",
+        "@types/mocha": "^5.2.1",
+        "@types/node": "^10.3.1",
+        "@types/sequelize": "^4.27.20",
+        "@types/supertest": "^2.0.4",
+        "chai": "^4.1.2",
+        "copyfiles": "^2.0.0",
+        "cross-env": "^5.1.6",
+        "js-beautify": "^1.7.5",
+        "mocha": "^4.1.0",
+        "nodemon": "^1.17.5",
+        "sequelize-cli": "^3.2.0",
+        "should": "^13.2.1",
+        "skipper-disk": "^0.5.11",
+        "supertest": "^3.1.0",
+        "ts-node": "^6.1.0",
+        "tslint": "^5.10.0",
+        "typescript": "^2.9.1"
+      },
+      "nodemonConfig": {
+        "ignore": [
+          "public/*",
+          "logs/*"
+        ]
+      }
+    }
+
+    // sort dependencies like npm(1)
+    pkg.dependencies = sortedObject(pkg.dependencies);
+
+    // process.json
+    var process = {
+      "apps": [{
+        "name": app_name,
+        "script": "app.js",
+        "node_args": "--harmony",
+        "watch": false,
+        "log_date_format": "YYYY-MM-DD HH:mm:ss",
+        "env": {
+          "NODE_ENV": "development",
+          "DATABASE_USERNAME": "root",
+          "DATABASE_PASSWORD": "123456",
+          "DATABASE_NAME": "roas_dev",
+          "DATABASE_HOST": "localhost",
+          "HOST_NAME": "localhost",
+          "HOST_IP": "127.0.0.1",
+          "HTTP_ENABLE": true,
+          "WS_ENABLE": false,
+          "TCP_ENABLE": false,
+          "HTTP_PROVIDER": "",
+          "TCP_PROVIDER": ""
+        },
+        "env_production": {
+          "NODE_ENV": "production",
+          "DATABASE_USERNAME": "root",
+          "DATABASE_PASSWORD": "123456",
+          "DATABASE_NAME": "roas",
+          "DATABASE_HOST": "localhost",
+          "HOST_NAME": "localhost",
+          "HOST_IP": "127.0.0.1",
+          "HTTP_ENABLE": true,
+          "WS_ENABLE": false,
+          "TCP_ENABLE": false,
+          "HTTP_PROVIDER": "",
+          "TCP_PROVIDER": ""
+        }
+      }]
+    };
+
+    // write files
+    write(path + '/.gitignore', loadTemplate('js/gitignore.txt'));
+    write(path + '/.sequelizerc', loadTemplate('js/.sequelizerc'));
+    write(path + '/pm2_publish.bat', loadTemplate('js/pm2_publish.bat'));
+    write(path + '/pm2_publish.sh', loadTemplate('js/pm2_publish.sh'));
+    write(path + '/process.json', JSON.stringify(process, null, 2));
+    write(path + '/package.json', JSON.stringify(pkg, null, 2));
+    write(path + '/README.md', loadTemplate('js/README.md'));
+    write(path + '/README_CN.md', loadTemplate('js/README_CN.md'));
+    write(path + '/tsconfig.json', loadTemplate('js/tsconfig.json'));
+    write(path + '/tslint.json', loadTemplate('js/tslint.json'));
+
+    // JavaScript
+    write(path + '/index.js', loadTemplate('js/index.js'));
+
+    complete();
+  });
+}
+
+function copy_template(from, to) {
+  from = _path.join(__dirname, '..', 'templates', from);
+  write(to, fs.readFileSync(from, 'utf-8'));
+}
+
+/**
+ * Check if the given directory `path` is empty.
+ *
+ * @param {String} path
+ * @param {Function} fn
+ */
+
+function emptyDirectory(path, fn) {
+  fs.readdir(path, function (err, files) {
+    if (err && 'ENOENT' != err.code) throw err;
+    fn(!files || !files.length);
+  });
+}
+
+/**
+ * Graceful exit for async STDIO
+ */
+
+function exit(code) {
+  // flush output for Node.js Windows pipe bug
+  // https://github.com/joyent/node/issues/6247 is just one bug example
+  // https://github.com/visionmedia/mocha/issues/333 has a good discussion
+  function done() {
+    if (!(draining--)) _exit(code);
+  }
+
+  var draining = 0;
+  var streams = [process.stdout, process.stderr];
+
+  exit.exited = true;
+
+  streams.forEach(function (stream) {
+    // submit empty write request and wait for completion
+    draining += 1;
+    stream.write('', done);
+  });
+
+  done();
+}
+
+/**
+ * Determine if launched from cmd.exe
+ */
+
+function launchedFromCmd() {
+  return process.platform === 'win32' &&
+    process.env._ === undefined;
+}
+
+/**
+ * Load template file.
+ */
+
+function loadTemplate(name) {
+  return fs.readFileSync(_path.join(__dirname, '..', 'templates', name), 'utf-8');
+}
+
+/**
+ * Main program.
+ */
+
+function main() {
+  // Path
+  var destinationPath = program.args.shift() || '.';
+
+  // App name
+  var appName = _path.basename(_path.resolve(destinationPath));
+
+  // Generate application
+  emptyDirectory(destinationPath, function (empty) {
+    if (empty || program.force) {
+      createApplication(appName, destinationPath);
+    } else {
+      confirm('destination is not empty, continue? [y/N] ', function (ok) {
+        if (ok) {
+          process.stdin.destroy();
+          createApplication(appName, destinationPath);
+        } else {
+          console.error('aborting');
+          exit(1);
+        }
+      });
+    }
+  });
+}
+
+// 判断该目录是否存在，不存在需要先创建目录
+function exists(src, dst, callback) {
+  fs.exists(dst, function (exists) {
+    // 已存在
+    if (exists) {
+      callback(src, dst);
+    }
+    // 不存在
+    else {
+      fs.mkdir(dst, function () {
+        callback(src, dst);
+      });
+    }
+  });
+};
+
+/*
+ * 复制目录中的所有文件包括子目录
+ * @param{ String } 需要复制的目录
+ * @param{ String } 复制到指定的目录
+ */
+function copy(src, dst) {
+  // 读取目录中的所有文件/目录
+  fs.readdir(src, function (err, paths) {
+    if (err) {
+      throw err;
+    }
+    paths.forEach(function (path) {
+      var _src = src + '/' + path,
+        _dst = dst + '/' + path,
+        readable, writable;
+      fs.stat(_src, function (err, st) {
+        if (err) {
+          throw err;
+        }
+        // 判断是否为文件
+        if (st.isFile()) {
+          // 创建文件     
+          write(_dst, fs.readFileSync(_src));
+        }
+        // 如果是目录则递归调用自身
+        else if (st.isDirectory()) {
+          exists(_src, _dst, copy);
+        }
+      });
+    });
+  });
+};
+
+/**
+ * echo str > path.
+ *
+ * @param {String} path
+ * @param {String} str
+ */
+
+function write(path, str, mode) {
+  fs.writeFileSync(path, str, {
+    mode: mode || 0666
+  });
+  console.log('   \x1b[36mcreate\x1b[0m : ' + path);
+}
+
+/**
+ * Mkdir -p.
+ *
+ * @param {String} path
+ * @param {Function} fn
+ */
+
+function mkdir(path, fn) {
+  mkdirp(path, 0755, function (err) {
+    if (err) throw err;
+    console.log('   \033[36mcreate\033[0m : ' + path);
+    fn && fn();
+  });
+}
