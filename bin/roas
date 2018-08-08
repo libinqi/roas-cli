@@ -123,7 +123,7 @@ function createApplication(app_name, path) {
       "scripts": {
         "start": "cross-env NODE_ENV=development ./node_modules/.bin/nodemon -e ts -r ts-node/register src/app.ts",
         "test": "./node_modules/.bin/mocha test/bootstrap.test.ts  --opts test/mocha.opts",
-        "build": "rd/s/q dist & tsc -p ./src/tsconfig.json & copyfiles -f ./src/public/*.* ./dist/public & copyfiles package.json process.json pm2_publish.bat pm2_publish.sh ./dist",
+        "build": "rd/s/q dist & tsc -p ./src/tsconfig.json & copyfiles -u 1 ./src/public/** ./dist & copyfiles package.json process.json pm2_publish.bat pm2_publish.sh ./dist",
         "pm2": "pm2 start process.json --env production",
         "lint": "tslint -c tslint.json -p tsconfig.json",
         "db:migrate": "./node_modules/.bin/sequelize db:migrate",
@@ -152,6 +152,7 @@ function createApplication(app_name, path) {
         "koa-router": "^7.4.0",
         "koa-socket.io": "^1.1.2",
         "koa-static": "^4.0.3",
+        "koa-views": "^6.1.4",
         "lodash": "^4.17.10",
         "log4js": "^2.8.0",
         "moment": "^2.22.2",
@@ -162,7 +163,8 @@ function createApplication(app_name, path) {
         "request": "^2.87.0",
         "roas-mount": "^1.0.3",
         "roas-restql": "^1.0.7",
-        "sequelize": "^4.37.10"
+        "sequelize": "^4.37.10",
+        "swig": "^1.4.2"
       },
       "devDependencies": {
         "@types/chai": "^4.1.3",
@@ -171,6 +173,7 @@ function createApplication(app_name, path) {
         "@types/koa-json": "^2.0.18",
         "@types/koa-jwt": "^3.3.0",
         "@types/koa-router": "^7.0.28",
+        "@types/koa-views": "^2.0.3",
         "@types/mocha": "^5.2.1",
         "@types/node": "^10.3.1",
         "@types/sequelize": "^4.27.20",
@@ -205,7 +208,7 @@ function createApplication(app_name, path) {
       "apps": [{
         "name": app_name,
         "script": "app.js",
-        "node_args": "--harmony",
+        "node_args": "--harmony --env production",
         "exec_mode": "cluster",
         "instances": "0",
         "instance_var": "INSTANCE_ID",
