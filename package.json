@@ -1,6 +1,6 @@
 {
   "name": "roas-cli",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "fullstack roas cli for roas server framework",
   "scripts": {
     "start": "npm publish ."
